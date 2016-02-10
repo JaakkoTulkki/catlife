@@ -159,8 +159,6 @@ while humans:
                     del humans[e]
     humans = None
 
-print("lucky founder ", len(lucky_founder))
-
 sys.stdout.write("Total number of cats: {}\n".format(N))
 sys.stdout.write("Number of cats found: {}\n".format(len(lucky_founder)))
 avg_moves = sum([f.moves for f in lucky_founder])/len(lucky_founder) if len(lucky_founder) else 0
