@@ -64,7 +64,7 @@ class Cat:
 class Human:
     def __init__(self, human_id):
         self.human_id = human_id
-        self.visited_stations = []
+        self.visited_stations = set()
         self.moves = 0
         self.cat_missing = True
 
@@ -73,7 +73,7 @@ class Human:
         self.station = stations[random.choice(list(stations.keys()))]
         while self.station == self.cat.station:
             self.station = stations[random.choice(list(stations.keys()))]
-        self.visited_stations.append(self.station)
+        self.visited_stations.add(self.station)
 
     def infinite_loop(self):
         if len(self.station.get_connections()) == 1 and self.station.get_connections()[0] == self.station:
@@ -97,7 +97,7 @@ class Human:
         if not new_station:
             self.station = random.choice(available_stations)
         self.moves += 1
-        self.visited_stations.append(self.station)
+        self.visited_stations.add(self.station)
         return True
 
     def cat_found(self):
@@ -147,6 +147,8 @@ while humans:
                     cat_able_to_move = cat.move()
                     able_to_move = human.move()
                     if not able_to_move or not cat_able_to_move:
+                        if human.cat_found():
+                            lucky_founder.append(human)
                         del humans[e]
                     if human.infinite_loop():
                         del humans[e]
