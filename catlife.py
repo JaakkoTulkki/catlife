@@ -8,6 +8,7 @@ N path/to/tfl_stations.csv path/to/tfl_connections.csv
 import random
 import time
 import sys
+import math
 
 if sys.version_info < (3, 0):
     raise Exception("You should use Python3")
@@ -115,6 +116,7 @@ class Station:
         self.connections = set()
         self.closed = False
         self.graph = None
+        self.number_of_visits = 0
 
     def add_connection(self, connection):
         self.connections.add(connection)
@@ -147,6 +149,7 @@ class Cat:
         if not available_stations:
             return None
         self.station = random.choice(available_stations)
+        self.station.number_of_visits += 1
         self.moves += 1
         return True
 
@@ -185,6 +188,7 @@ class Human:
             self.station = random.choice(available_stations)
         self.moves += 1
         self.visited_stations.add(self.station)
+        self.station.number_of_visits += 1
         return True
 
     def cat_found(self):
@@ -223,6 +227,9 @@ ug.find_the_cats()
 sys.stdout.write("Total number of cats: {}\n".format(N))
 sys.stdout.write("Number of cats found: {}\n".format(ug.cats_found))
 avg_moves = sum([f.moves for f in ug.founders])/ug.cats_found if ug.cats_found else 0
-sys.stdout.write("Average number of movements required to find a cat: {}\n".format(avg_moves))
-
-print("Duration:", time.time()-start)
+sys.stdout.write("Average number of movements required to find a cat: {}\n".format(math.ceil(avg_moves)))
+most_visited_station = max(list(stations.values()), key=lambda x: x.number_of_visits)
+sys.stdout.write("Most visited station was {} with {} visists".format(most_visited_station.name,
+                                                                      most_visited_station.number_of_visits))
+print()
+sys.stdout.write("Duration:" + str(time.time()-start))
