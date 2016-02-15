@@ -154,7 +154,7 @@ class Cat:
 class Human:
     def __init__(self, human_id):
         self.human_id = human_id
-        self.visited_stations = []
+        self.visited_stations = set()
         self.moves = 0
         self.cat_missing = True
 
@@ -163,7 +163,7 @@ class Human:
         self.station = stations[random.choice(list(stations.keys()))]
         while self.station == self.cat.station:
             self.station = stations[random.choice(list(stations.keys()))]
-        self.visited_stations.append(self.station)
+        self.visited_stations.add(self.station)
 
     def cat_in_different_network(self):
         return self.station.graph != self.cat.station.graph
@@ -184,7 +184,7 @@ class Human:
         if not new_station:
             self.station = random.choice(available_stations)
         self.moves += 1
-        self.visited_stations.append(self.station)
+        self.visited_stations.add(self.station)
         return True
 
     def cat_found(self):
@@ -219,7 +219,6 @@ ug.stations = stations
 ug.construct_lines()
 ug.create_humans_and_lost_cats(N)
 ug.find_the_cats()
-
 
 sys.stdout.write("Total number of cats: {}\n".format(N))
 sys.stdout.write("Number of cats found: {}\n".format(ug.cats_found))
