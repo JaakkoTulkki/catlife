@@ -1,6 +1,6 @@
 """
 Accepts only csv files
-first argument: N path/to/tfl_stations.csv path/to/tfl_connections.csv
+N path/to/tfl_stations.csv path/to/tfl_connections.csv
 
 """
 
@@ -9,13 +9,103 @@ import random
 import time
 import sys
 
+if sys.version_info < (3, 0):
+    raise Exception("You should use Python3")
+
+if len(sys.argv) != 4:
+    raise Exception("You should introduce the following arguments: N path/to/tfl_stations.csv "
+                    "path/to/tfl_connections.csv")
+
 start = time.time()
-
 TURNS = 100000
-
 N = int(sys.argv[1])
 stations_file = sys.argv[2]
 station_connections_file = sys.argv[3]
+
+
+class UnderGround:
+    def __init__(self):
+        self.stations = {}
+        self.networks = []
+        self.cats = {}
+        self.humans = {}
+        self.N = 0
+        self.cats_found = 0
+        self.founders = []
+
+    def construct_lines(self):
+        """
+        We create networks that are connected to each other.
+         for instance a-b-c-d-e are initially connected to each other,
+         but when c closes, only a-b , and d-e are now connected
+
+         We go through the all the stations, and create the networks
+        """
+        self.networks = []
+        mapped_stations = []
+
+        for station in self.stations.values():
+            if not station.closed and station not in mapped_stations:
+                g = Graph()
+                mapped_stations.extend(g.create_network(station))
+                self.networks.append(g)
+
+    def create_humans_and_lost_cats(self, N):
+        self.N = N
+        for e in range(N):
+            cat = Cat(e)
+            human = Human(e)
+            cat.owner = human
+            human.cat = cat
+            cat.set_random_start_station(self.stations)
+            human.set_random_start_station(self.stations)
+            self.cats[cat.cat_id] = cat
+            self.humans[human.human_id] = human
+
+    def find_the_cats(self):
+        t = 0
+        while t < TURNS and self.humans:
+            for e in range(self.N):
+                if e in self.humans:
+                    c = self.cats[e]
+                    h = self.humans[e]
+                    cat_able_to_move = c.move()
+                    human_able_to_move = h.move()
+                    if h.cat_found():
+                        # remove from the search list
+                        del self.humans[e]
+                        self.cats_found += 1
+                        self.founders.append(h)
+                    # if not found, check if the cat and the human are even in the same network
+                    elif h.cat_in_different_network():
+                        del self.humans[e]
+                    elif not cat_able_to_move or not human_able_to_move:
+                        del self.humans[e]
+                    t += 1
+
+
+class Graph:
+    """
+    A Graph represents a network of connected stations (all of them must be open)
+     a-b-c-d-e is a network, if the c closes, then we have two networks: a-b & d-e
+    """
+    def __init__(self):
+        self.stations = []
+
+    def create_network(self, start_station):
+        """
+        take a station, and follow its connections to create a list of the stations in the network
+        """
+        self.stations.append(start_station)
+        stations = [start_station]
+        while stations:
+            for connected_station in stations.pop().get_connections():
+                if connected_station not in self.stations and not connected_station.closed:
+                    self.stations.append(connected_station)
+                    stations.append(connected_station)
+                    # the station must also know to which network it belongs to
+                    connected_station.set_graph(self)
+        return self.stations
 
 
 class Station:
@@ -24,6 +114,7 @@ class Station:
         self.name = name
         self.connections = set()
         self.closed = False
+        self.graph = None
 
     def add_connection(self, connection):
         self.connections.add(connection)
@@ -34,6 +125,11 @@ class Station:
     def close_station(self, n):
         self.closed = True
         sys.stdout.write("Owner {} found cat {} - {} is now closed\n".format(n, n, self.name))
+        # construct lines again to see if the cats are humnans are in the same networks
+        self.ug.construct_lines()
+
+    def set_graph(self, graph):
+        self.graph = graph
 
 
 class Cat:
@@ -54,12 +150,6 @@ class Cat:
         self.moves += 1
         return True
 
-    def infinite_loop(self):
-        if len(self.station.get_connections()) == 1 and self.station.get_connections()[0] == self.station:
-            print("cat in infinite loop")
-            return True
-        return False
-
 
 class Human:
     def __init__(self, human_id):
@@ -75,11 +165,8 @@ class Human:
             self.station = stations[random.choice(list(stations.keys()))]
         self.visited_stations.append(self.station)
 
-    def infinite_loop(self):
-        if len(self.station.get_connections()) == 1 and self.station.get_connections()[0] == self.station:
-            print("human infinite loop")
-            return True
-        return False
+    def cat_in_different_network(self):
+        return self.station.graph != self.cat.station.graph
 
     def move(self):
         # do nothing if all neighboring stations are closed
@@ -107,6 +194,8 @@ class Human:
         return not self.cat_missing
 
 
+# we initialize the underground and create the stations
+ug = UnderGround()
 stations = {}
 
 with open(stations_file, 'rt') as tube_stations:
@@ -114,54 +203,27 @@ with open(stations_file, 'rt') as tube_stations:
         id_number, station_name = row.replace("\n", "").split(",")
         stations[id_number] = Station(id_number, station_name)
 
+# after creating the stations set the connections and mark to which Underground they belong to
 with open(station_connections_file, 'rt') as tube_connections:
     for row in tube_connections:
         station_id, connection_id = row.replace("\n", "").split(",")
         station = stations[station_id]
         connection_station = stations[connection_id]
+        station.ug = ug
+        connection_station.ug = ug
         station.add_connection(connection_station)
         connection_station.add_connection(station)
 
-cats = {}
-humans = {}
+ug.stations = stations
+# construct the initial tubenetwork
+ug.construct_lines()
+ug.create_humans_and_lost_cats(N)
+ug.find_the_cats()
 
-for e in range(N):
-    cat = Cat(e)
-    human = Human(e)
-    cat.owner = human
-    human.cat = cat
-    cat.set_random_start_station(stations)
-    human.set_random_start_station(stations)
-    cats[cat.cat_id] = cat
-    humans[human.human_id] = human
-
-
-lucky_founder = []
-while humans:
-    for i in range(TURNS):
-        for e in range(N):
-            if e in humans:
-                cat = cats[e]
-                human = humans[e]
-                if not human.cat_found():
-                    cat_able_to_move = cat.move()
-                    able_to_move = human.move()
-                    if not able_to_move or not cat_able_to_move:
-                        del humans[e]
-                    if human.infinite_loop():
-                        del humans[e]
-                    if cat.infinite_loop():
-                        del humans[e]
-                else:
-                    lucky_founder.append(human)
-                    del humans[e]
-    humans = None
-
-print("lucky founder ", len(lucky_founder))
 
 sys.stdout.write("Total number of cats: {}\n".format(N))
-sys.stdout.write("Number of cats found: {}\n".format(len(lucky_founder)))
-avg_moves = sum([f.moves for f in lucky_founder])/len(lucky_founder) if len(lucky_founder) else 0
+sys.stdout.write("Number of cats found: {}\n".format(ug.cats_found))
+avg_moves = sum([f.moves for f in ug.founders])/ug.cats_found if ug.cats_found else 0
 sys.stdout.write("Average number of movements required to find a cat: {}\n".format(avg_moves))
 
 print("Duration:", time.time()-start)
