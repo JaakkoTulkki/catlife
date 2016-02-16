@@ -17,7 +17,6 @@ if len(sys.argv) != 4:
     raise Exception("You should introduce the following arguments: N path/to/tfl_stations.csv "
                     "path/to/tfl_connections.csv")
 
-start = time.time()
 TURNS = 100000
 N = int(sys.argv[1])
 stations_file = sys.argv[2]
@@ -25,6 +24,10 @@ station_connections_file = sys.argv[3]
 
 
 class UnderGround:
+    """
+    Underground main class
+    Underground may have various networks, or Graphs, that are not connected with each other
+    """
     def __init__(self):
         self.stations = {}
         self.networks = []
@@ -34,13 +37,34 @@ class UnderGround:
         self.cats_found = 0
         self.founders = []
 
-    def construct_lines(self):
+    def build_stations(self, stations_file, station_connections_file):
+        """
+        builds the stations, and adds the connections to each station
+        """
+        with open(stations_file, 'rt') as tube_stations:
+            for row in tube_stations:
+                id_number, station_name = row.replace("\n", "").split(",")
+                self.stations[id_number] = Station(id_number, station_name)
+
+        # after creating the stations set the connections and mark to which Underground they belong to
+        with open(station_connections_file, 'rt') as tube_connections:
+            for row in tube_connections:
+                station_id, connection_id = row.replace("\n", "").split(",")
+                station = self.stations[station_id]
+                connection_station = self.stations[connection_id]
+                station.ug = ug
+                connection_station.ug = ug
+                station.add_connection(connection_station)
+                connection_station.add_connection(station)
+
+    def construct_networks(self):
         """
         We create networks that are connected to each other.
          for instance a-b-c-d-e are initially connected to each other,
-         but when c closes, only a-b , and d-e are now connected
+         but when c closes, only a-b & d-e are now connected
 
-         We go through the all the stations, and create the networks
+        Every time a station closes, we construct the networks again:
+         We go through the all the stations, and create the graphs
         """
         self.networks = []
         mapped_stations = []
@@ -82,13 +106,14 @@ class UnderGround:
                         del self.humans[e]
                     elif not cat_able_to_move or not human_able_to_move:
                         del self.humans[e]
-                    t += 1
+            t += 1
 
 
 class Graph:
     """
     A Graph represents a network of connected stations (all of them must be open)
-     a-b-c-d-e is a network, if the c closes, then we have two networks: a-b & d-e
+     a-b-c-d-e is a network; if the c closes, then we have two networks that are not connected: a-b & d-e
+
     """
     def __init__(self):
         self.stations = []
@@ -97,6 +122,7 @@ class Graph:
         """
         take a station, and follow its connections to create a list of the stations in the network
         """
+        start_station.set_graph(self)
         self.stations.append(start_station)
         stations = [start_station]
         while stations:
@@ -128,7 +154,7 @@ class Station:
         self.closed = True
         sys.stdout.write("Owner {} found cat {} - {} is now closed\n".format(n, n, self.name))
         # construct lines again to see if the cats are humnans are in the same networks
-        self.ug.construct_lines()
+        self.ug.construct_networks()
 
     def set_graph(self, graph):
         self.graph = graph
@@ -200,27 +226,9 @@ class Human:
 
 # we initialize the underground and create the stations
 ug = UnderGround()
-stations = {}
-
-with open(stations_file, 'rt') as tube_stations:
-    for row in tube_stations:
-        id_number, station_name = row.replace("\n", "").split(",")
-        stations[id_number] = Station(id_number, station_name)
-
-# after creating the stations set the connections and mark to which Underground they belong to
-with open(station_connections_file, 'rt') as tube_connections:
-    for row in tube_connections:
-        station_id, connection_id = row.replace("\n", "").split(",")
-        station = stations[station_id]
-        connection_station = stations[connection_id]
-        station.ug = ug
-        connection_station.ug = ug
-        station.add_connection(connection_station)
-        connection_station.add_connection(station)
-
-ug.stations = stations
+ug.build_stations(stations_file, station_connections_file)
 # construct the initial tubenetwork
-ug.construct_lines()
+ug.construct_networks()
 ug.create_humans_and_lost_cats(N)
 ug.find_the_cats()
 
@@ -228,8 +236,7 @@ sys.stdout.write("Total number of cats: {}\n".format(N))
 sys.stdout.write("Number of cats found: {}\n".format(ug.cats_found))
 avg_moves = sum([f.moves for f in ug.founders])/ug.cats_found if ug.cats_found else 0
 sys.stdout.write("Average number of movements required to find a cat: {}\n".format(math.ceil(avg_moves)))
-most_visited_station = max(list(stations.values()), key=lambda x: x.number_of_visits)
+most_visited_station = max(list(ug.stations.values()), key=lambda x: x.number_of_visits)
 sys.stdout.write("Most visited station was {} with {} visists".format(most_visited_station.name,
                                                                       most_visited_station.number_of_visits))
-print()
-sys.stdout.write("Duration:" + str(time.time()-start))
+
